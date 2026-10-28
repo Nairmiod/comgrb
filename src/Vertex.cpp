@@ -1,10 +1,7 @@
 #include "Vertex.h"
 
-
-
 Vertex Vertex::VertexShader(const Vertex& v, const glm::mat4& mvp, const glm::mat4& model)
 {
-
     glm::vec4 newPosition = mvp * v.Position();
     glm::vec3 newWorldCoordinates = glm::vec3(model * v.Position());
 
