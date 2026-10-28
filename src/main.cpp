@@ -113,7 +113,7 @@ int main(int argc, char** argv)
 
             float visible = glm::cross(glm::vec3(p1 - p0, 0.0f), glm::vec3(p2 - p0, 0.0f)).z;
 
-            if (visible < 0.00f)
+            if (visible > 0.00f)
             {
                 triangles.push_back({
                     p0, p1, p2,
@@ -135,7 +135,7 @@ int main(int argc, char** argv)
                     auto d2 = (tri.c.x - tri.b.x) * (p.y - tri.b.y) - (tri.c.y - tri.b.y) * (p.x - tri.b.x);
                     auto d3 = (tri.a.x - tri.c.x) * (p.y - tri.c.y) - (tri.a.y - tri.c.y) * (p.x - tri.c.x);
 
-                    if (d1 <= 0 && d2 <= 0 && d3 <= 0)
+                    if (d1 >= 0 && d2 >= 0 && d3 >= 0)
                     {
                         float total = d1 + d2 + d3;
                         float lambda1 = d2 / total; // weight for A
