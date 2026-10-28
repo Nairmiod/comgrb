@@ -32,6 +32,7 @@
 #include "glm/vec2.hpp"
 #include "glm/vec3.hpp"
 #include "glm/vec4.hpp"
+#include "glm/mat4x4.hpp"
 #include <ostream>
 
 class Vertex {
@@ -42,7 +43,7 @@ class Vertex {
     glm::vec3 m_normal;
 
 public:
-    Vertex VertexShader(Vertex v);
+    Vertex VertexShader(Vertex v, const glm::mat4x4& rotation);
 
 
     Vertex(glm::vec3 position, glm::vec3 color, glm::vec2 texCoord, glm::vec3 normal) : m_position(glm::vec4(
@@ -130,4 +131,4 @@ public:
 
 };
 
-Vertex VertexShader(Vertex v);
+Vertex VertexShader(Vertex v,const glm::mat4x4& rotation);

@@ -14,10 +14,10 @@ Vertex VertexShader(Vertex v, const glm::mat4& rotation)
         p.z + 4.0f
     );
     return Vertex(
-        newPosition,
-        v.WorldCoordinates(),
+        newPosition, // MVP * Position
+        v.WorldCoordinates(), // M * Position
         v.Color(),
         v.TexCoord(),
-        v.Normal()
+        v.Normal() // *M normal * Normal
     );
 }
