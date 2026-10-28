@@ -5,11 +5,11 @@
 #include "Mesh.h"
 #include "Vertex.h"
 #include "SDL3/SDL.h"
+#include <glm/gtc/matrix_transform.hpp>
 
 constexpr int WIDTH = 960;
 constexpr int HEIGHT = 540;
 const std::string NAME = "Boxerino now without box (still has laser magic)";
-
 
 
 int main(int argc, char** argv)
@@ -29,7 +29,6 @@ int main(int argc, char** argv)
         buffer[i] = glm::vec3(0.0f);
     }
 
-    glm::mat4x4 rot =
 
     auto mesh = Mesh::CreateCube(
         glm::vec3(1, 0, 0), glm::vec3(0, 1, 0),
@@ -38,45 +37,71 @@ int main(int argc, char** argv)
     );
 
 
+    glm::mat4x4 m = glm::mat4x4(1.0f);
+
+    // Projection: 45 degree FOV, aspect ratio, near=0.1, far=100.0
+    glm::mat4 projection = glm::perspective(
+        glm::radians(45.0f),
+        static_cast<float>(WIDTH) / static_cast<float>(HEIGHT),
+        0.1f,
+        100.0f
+    );
+    // View: Camera placed at (0, 0, 4), looking at (0, 0, 0), Up is (0, 1, 0)
+    glm::mat4 view = glm::lookAt(
+        glm::vec3(0.0f, 0.0f, 4.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 1.0f, 0.0f)
+    );
+
+    constexpr float C = WIDTH / 2.0f;
+    constexpr float halfW = WIDTH / 2.0f;
+    constexpr float halfH = HEIGHT / 2.0f;
 
     bool running = true;
     int frame = 0;
     while (running)
     {
-
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        constexpr float C = WIDTH / 2.0f;
         constexpr float halfW = WIDTH / 2.0f;
         constexpr float halfH = HEIGHT / 2.0f;
 
+        // Model animated per frame with normalized rotation axis
+        glm::mat4 model = glm::rotate(glm::mat4(1.0f), frame * 0.02f, glm::normalize(glm::vec3(0.5f, 1.0f, 0.0f)));
+        glm::mat4 mvp = projection * view * model;
+
+        // Draw ALL triangles into the backbuffer first
         for (const auto& tri : mesh->Tris())
         {
             const Vertex& v0 = *mesh->Vertices()[tri->a];
             const Vertex& v1 = *mesh->Vertices()[tri->b];
             const Vertex& v2 = *mesh->Vertices()[tri->c];
 
-            Vertex vs0 = VertexShader(v0);
-            Vertex vs1 = VertexShader(v1);
-            Vertex vs2 = VertexShader(v2);
+            Vertex vs0 = Vertex::VertexShader(v0, mvp, model);
+            Vertex vs1 = Vertex::VertexShader(v1, mvp, model);
+            Vertex vs2 = Vertex::VertexShader(v2, mvp, model);
 
+            // Perspective divide
             Vertex v0_proj = vs0 * (1.0f / vs0.Position().w);
             Vertex v1_proj = vs1 * (1.0f / vs1.Position().w);
             Vertex v2_proj = vs2 * (1.0f / vs2.Position().w);
 
-            glm::vec2 p0(halfW + v0_proj.Position().x * C, halfH - v0_proj.Position().y * C);
-            glm::vec2 p1(halfW + v1_proj.Position().x * C, halfH - v1_proj.Position().y * C);
-            glm::vec2 p2(halfW + v2_proj.Position().x * C, halfH - v2_proj.Position().y * C);
+            // Screen mapping
+            glm::vec2 p0(halfW + v0_proj.Position().x * halfW, halfH - v0_proj.Position().y * halfH);
+            glm::vec2 p1(halfW + v1_proj.Position().x * halfW, halfH - v1_proj.Position().y * halfH);
+            glm::vec2 p2(halfW + v2_proj.Position().x * halfW, halfH - v2_proj.Position().y * halfH);
 
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             SDL_RenderLine(renderer, p0.x, p0.y, p1.x, p1.y);
             SDL_RenderLine(renderer, p1.x, p1.y, p2.x, p2.y);
             SDL_RenderLine(renderer, p2.x, p2.y, p0.x, p0.y);
-        }
-        SDL_RenderPresent(renderer);
+        } // <--- Triangles finish drawing here
 
+        // Present once per frame
+        SDL_RenderPresent(renderer);
         frame++;
+
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
@@ -87,12 +112,7 @@ int main(int argc, char** argv)
             }
         }
         SDL_Delay(16);
-
-
-
-        SDL_SetWindowTitle(window, std::string(NAME).c_str());
     }
-
     delete[] buffer;
     delete[] frameBuffer;
     SDL_DestroyTexture(texture);

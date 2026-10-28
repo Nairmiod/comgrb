@@ -1,1 +1,2 @@
 Help me fix the project setup
+help me generate the MVP matrix but dont generate code for me

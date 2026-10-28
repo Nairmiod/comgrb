@@ -1,23 +1,21 @@
 #include "Vertex.h"
 
-#include <glm/mat4x4.hpp>
 
 
-Vertex VertexShader(Vertex v, const glm::mat4& rotation)
+Vertex Vertex::VertexShader(const Vertex& v, const glm::mat4& mvp, const glm::mat4& model)
 {
-    auto p = rotation * v.Position();
 
-    glm::vec4 newPosition(
-        p.x,
-        p.y,
-        0.0f,
-        p.z + 4.0f
-    );
+    glm::vec4 newPosition = mvp * v.Position();
+    glm::vec3 newWorldCoordinates = glm::vec3(model * v.Position());
+
+    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+    glm::vec3 newNormal = glm::normalize(normalMatrix * v.Normal());
+
     return Vertex(
         newPosition,
-        v.WorldCoordinates(),
+        newWorldCoordinates,
         v.Color(),
         v.TexCoord(),
-        v.Normal()
+        newNormal
     );
 }
