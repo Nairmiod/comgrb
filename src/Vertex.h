@@ -15,7 +15,7 @@ class Vertex {
 
 public:
     static Vertex VertexShader(const Vertex& v, const glm::mat4& mvp, const glm::mat4& model);
-
+    static glm::vec3 FragmentShader(const Vertex& v, const glm::vec3& cameraPos, const glm::vec3& lightPos = glm::vec3(3.0f, 3.0f, 5.0f), const glm::vec3& lightColor = glm::vec3(1.0f, 1.0f, 1.0f));
 
     Vertex(glm::vec3 position, glm::vec3 color, glm::vec2 texCoord, glm::vec3 normal) : m_position(glm::vec4(
             position, 1.0f)),

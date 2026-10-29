@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <algorithm>
 #include <glm/glm.hpp>
 #include "Mesh.h"
 #include "Vertex.h"
@@ -11,13 +12,13 @@
 
 constexpr int WIDTH = 960;
 constexpr int HEIGHT = 540;
-const std::string NAME = "Morty it turns";
 
 struct Triangle
 {
     glm::vec2 a, b, c;
     Vertex v0_proj, v1_proj, v2_proj;
     float w0, w1, w2;
+    float minX, maxX, minY, maxY;
 };
 
 inline int linearToSRGB(const float& norm)
@@ -43,18 +44,26 @@ int main(int argc, char** argv)
 {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) return -1;
 
-    SDL_Window* window = SDL_CreateWindow(NAME.c_str(), WIDTH, HEIGHT, 0);
+    SDL_Window* window = SDL_CreateWindow("Morty it turns - Cube (Press Space for Sphere)", WIDTH, HEIGHT, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
                                              SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
 
     uint32_t* frameBuffer = new uint32_t[WIDTH * HEIGHT];
 
-    auto mesh = Mesh::CreateCube(
-        glm::vec3(1, 0.2, 0.3), glm::vec3(0.1, 1, 0.1),
-        glm::vec3(0.8, 0.4, 1), glm::vec3(1, 1, 0.5),
-        glm::vec3(1, 0.4, 1), glm::vec3(0.7, 1, 1)
+    auto cubeMesh = Mesh::CreateCube(
+        glm::vec3(1.0f, 0.2f, 0.3f), glm::vec3(0.1f, 1.0f, 0.1f),
+        glm::vec3(0.8f, 0.4f, 1.0f), glm::vec3(1.0f, 1.0f, 0.5f),
+        glm::vec3(1.0f, 0.4f, 1.0f), glm::vec3(0.7f, 1.0f, 1.0f)
     );
+
+    auto sphereMesh = Mesh::CreateSphere(16, glm::vec3(0.2f, 0.6f, 0.9f));
+    std::shared_ptr<Mesh> currentMesh = cubeMesh;
+    bool isSphere = false;
+
+    // Camera & Light positions in World Space
+    const glm::vec3 cameraPos(0.0f, 0.0f, 4.0f);
+    const glm::vec3 lightPos(3.0f, 3.0f, 4.0f);
 
     // Projection: 45 degree FOV, aspect ratio, near=0.1, far=100.0
     glm::mat4 projection = glm::perspective(
@@ -64,9 +73,9 @@ int main(int argc, char** argv)
         100.0f
     );
 
-    // View: Camera placed at (0, 0, 4), looking at (0, 0, 0), Up is (0, 1, 0)
+    // View: Camera placed at cameraPos looking at origin
     glm::mat4 view = glm::lookAt(
-        glm::vec3(0.0f, 0.0f, 4.0f),
+        cameraPos,
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 1.0f, 0.0f)
     );
@@ -91,11 +100,11 @@ int main(int argc, char** argv)
 
         std::vector<Triangle> triangles;
 
-        for (const auto& tri : mesh->Tris())
+        for (const auto& tri : currentMesh->Tris())
         {
-            const Vertex& v0 = *mesh->Vertices()[tri->a];
-            const Vertex& v1 = *mesh->Vertices()[tri->b];
-            const Vertex& v2 = *mesh->Vertices()[tri->c];
+            const Vertex& v0 = *currentMesh->Vertices()[tri->a];
+            const Vertex& v1 = *currentMesh->Vertices()[tri->b];
+            const Vertex& v2 = *currentMesh->Vertices()[tri->c];
 
             Vertex vs0 = Vertex::VertexShader(v0, mvp, model);
             Vertex vs1 = Vertex::VertexShader(v1, mvp, model);
@@ -115,10 +124,16 @@ int main(int argc, char** argv)
 
             if (visible > 0.00f)
             {
+                float minX = std::max(0.0f, std::min({p0.x, p1.x, p2.x}));
+                float maxX = std::min(static_cast<float>(WIDTH - 1), std::max({p0.x, p1.x, p2.x}));
+                float minY = std::max(0.0f, std::min({p0.y, p1.y, p2.y}));
+                float maxY = std::min(static_cast<float>(HEIGHT - 1), std::max({p0.y, p1.y, p2.y}));
+
                 triangles.push_back({
                     p0, p1, p2,
                     v0_proj, v1_proj, v2_proj,
-                    vs0.Position().w, vs1.Position().w, vs2.Position().w
+                    vs0.Position().w, vs1.Position().w, vs2.Position().w,
+                    minX, maxX, minY, maxY
                 });
             }
         }
@@ -131,6 +146,9 @@ int main(int argc, char** argv)
                 glm::vec2 p(j, i);
                 for (const auto& tri : triangles)
                 {
+                    if (p.x < tri.minX || p.x > tri.maxX || p.y < tri.minY || p.y > tri.maxY)
+                        continue;
+
                     auto d1 = (tri.b.x - tri.a.x) * (p.y - tri.a.y) - (tri.b.y - tri.a.y) * (p.x - tri.a.x);
                     auto d2 = (tri.c.x - tri.b.x) * (p.y - tri.b.y) - (tri.c.y - tri.b.y) * (p.x - tri.b.x);
                     auto d3 = (tri.a.x - tri.c.x) * (p.y - tri.c.y) - (tri.a.y - tri.c.y) * (p.x - tri.c.x);
@@ -142,25 +160,24 @@ int main(int argc, char** argv)
                         float lambda2 = d3 / total; // weight for B
                         float lambda3 = d1 / total; // weight for C
 
-                        // Numerator: λ1 * Â + λ2 * B̂ + λ3 * Ĉ
+                        // Perspective-correct reconstructed vertex Q
                         Vertex numerator = (lambda1 * tri.v0_proj) +
                                            (lambda2 * tri.v1_proj) +
                                            (lambda3 * tri.v2_proj);
-                        // Denominator: λ1 / Aw + λ2 / Bw + λ3 / Cw
                         float denominator = (lambda1 / tri.w0) +
                                             (lambda2 / tri.w1) +
                                             (lambda3 / tri.w2);
-                        // Q is the fully reconstructed, perspective-correct Vertex:
                         Vertex Q = numerator * (1.0f / denominator);
 
-                        frameBuffer[i * WIDTH + j] = toSRGB(Q.Color());
+                        // Fragment Shader: Diffuse & Specular shading
+                        glm::vec3 shadedColor = Vertex::FragmentShader(Q, cameraPos, lightPos);
+                        frameBuffer[i * WIDTH + j] = toSRGB(shadedColor);
                         break;
                     }
                 }
             }
         }
 
-        SDL_SetWindowTitle(window, std::string(NAME).c_str());
         SDL_UpdateTexture(texture, NULL, frameBuffer, WIDTH * sizeof(uint32_t));
         SDL_RenderTexture(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
@@ -172,6 +189,14 @@ int main(int argc, char** argv)
                 (e.type == SDL_EVENT_KEY_UP && e.key.key == SDLK_ESCAPE))
             {
                 running = false;
+            }
+            if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_SPACE)
+            {
+                isSphere = !isSphere;
+                currentMesh = isSphere ? sphereMesh : cubeMesh;
+                SDL_SetWindowTitle(window, isSphere
+                    ? "Morty it turns - Sphere (Press Space for Cube)"
+                    : "Morty it turns - Cube (Press Space for Sphere)");
             }
         }
         SDL_Delay(16);
